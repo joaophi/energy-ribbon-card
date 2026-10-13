@@ -796,6 +796,14 @@ export const drawEnergyDistributionDiagram = (
       });
       if (line.color) t.style.fill = line.color;
       t.textContent = line.text;
+      // Shrink lines wider than the circle's chord at their outer edge (baseline + descent).
+      const d = ty + 3 - y;
+      const room = 2 * Math.sqrt(R * R - d * d) - 8;
+      const w = t.getComputedTextLength();
+      if (w > room) {
+        const size = parseFloat(getComputedStyle(t).fontSize);
+        t.style.fontSize = `${(size * room) / w}px`;
+      }
     });
     const top =
       node.key === "solar" ||
