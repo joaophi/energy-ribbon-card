@@ -1,0 +1,16 @@
+{
+  "name": "energy-ribbon-card",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Home Assistant energy distribution card with flows sized by energy",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/card.ts --bundle --format=esm --target=chrome100,firefox100,safari15 --minify --legal-comments=none --outfile=dist/energy-ribbon-card.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@mdi/js": "7.4.47",
+    "esbuild": "0.25.5",
+    "typescript": "5.8.3"
+  }
+}
