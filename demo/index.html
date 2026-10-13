@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Energy Ribbon Card demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@500&display=swap">
+<style>
+/* Layout: a Lovelace-like wall of real cards, one scenario each, with the thing to check under each diagram. */
+:root {
+  --bg: #f3f4f6;
+  --ha-card: #ffffff;
+  --ha-text: #212121;
+  --ha-muted: #6b6f76;
+  --ha-divider: rgba(0, 0, 0, 0.12);
+  --ha-primary: #03a9f4;
+  --chip: #e8f3fb;
+  --chip-fg: #0b5d86;
+  --energy-solar-color: #ff9800;
+  --energy-grid-consumption-color: #488fc2;
+  --energy-grid-return-color: #8353d1;
+  --energy-battery-in-color: #f06292;
+  --energy-battery-out-color: #4db6ac;
+  --energy-gas-color: #8e021b;
+  --energy-water-color: #00bcd4;
+  --energy-non-fossil-color: #0f9d58;
+  --font: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Roboto Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --card-w: 380px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111214;
+    --ha-card: #1c1c1e;
+    --ha-text: #e1e1e1;
+    --ha-muted: #9a9ca1;
+    --ha-divider: rgba(225, 225, 225, 0.12);
+    --chip: #14303f;
+    --chip-fg: #8fd2f5;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111214;
+  --ha-card: #1c1c1e;
+  --ha-text: #e1e1e1;
+  --ha-muted: #9a9ca1;
+  --ha-divider: rgba(225, 225, 225, 0.12);
+  --chip: #14303f;
+  --chip-fg: #8fd2f5;
+  color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ha-text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.wrap { padding-inline: 16px; padding-block: 28px 48px; max-width: 1240px; margin-inline: auto; }
+.top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; margin-bottom: 24px; }
+.top > div { min-width: 0; }
+h1 { font-size: 22px; font-weight: 500; margin: 0 0 4px; text-wrap: balance; }
+.lede { margin: 0; color: var(--ha-muted); max-width: 62ch; }
+.lede a { color: var(--ha-primary); }
+.lede code { font-family: var(--mono); font-size: 12px; color: var(--ha-text); }
+label.ctl { display: flex; gap: 8px; align-items: center; color: var(--ha-muted); font-size: 13px; }
+select {
+  font: inherit; color: var(--ha-text); background: var(--ha-card);
+  border: 1px solid var(--ha-divider); border-radius: 8px; padding: 6px 10px;
+}
+select:focus-visible { outline: 2px solid var(--ha-primary); outline-offset: 2px; }
+
+#cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, min(var(--card-w), 100%));
+  justify-content: center;
+  gap: 16px;
+  align-items: start;
+}
+.ha-card {
+  background: var(--ha-card);
+  border-radius: 12px;
+  border: 1px solid var(--ha-divider);
+  padding: 16px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.ha-card header { display: flex; gap: 10px; align-items: baseline; }
+.num { font-family: var(--mono); font-size: 12px; color: var(--ha-muted); font-variant-numeric: tabular-nums; }
+.ha-card h2 { font-size: 16px; font-weight: 500; margin: 0; text-wrap: balance; }
+.note { margin: 0; color: var(--ha-muted); font-size: 13px; }
+.frame { padding-block: 8px; }
+.check {
+  margin: 0; font-size: 13px; padding: 8px 10px; border-radius: 8px;
+  background: var(--chip); color: var(--chip-fg);
+}
+.check span { font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; margin-right: 4px; }
+
+/* the card's own diagram styles */
+svg.diagram { display: block; width: 100%; overflow: visible; }
+.node { fill: var(--ha-card); }
+.icon { fill: var(--ha-text); }
+.value { font-size: 12px; fill: var(--ha-text); }
+.label { font-size: 12px; fill: var(--ha-muted); }
+.pill { font-size: 11px; font-weight: 500; }
+.shot .top, .shot .ha-card header, .shot .note, .shot .check { display: none; }
+.shot body { background: transparent; }
+.shot .wrap { padding-block: 16px; }
+.shot #cards { grid-template-columns: var(--card-w); }
+.shot .frame { padding-block: 0; }
+</style>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>Energy Ribbon Card <span id="version"></span></h1>
+      <p class="lede">Each card below is drawn by the card's real <code>diagram.ts</code> from made-up daily totals in kWh. Change the card width to see how the layout reflows. Source and install: <a href="https://github.com/joaophi/energy-ribbon-card">github.com/joaophi/energy-ribbon-card</a>.</p>
+    </div>
+    <label class="ctl" for="width">Card width
+      <select id="width">
+        <option value="300px">Narrow, 300px</option>
+        <option value="380px" selected>Default, 380px</option>
+        <option value="520px">Wide, 520px</option>
+      </select>
+    </label>
+  </div>
+  <section id="cards" aria-label="Scenarios"></section>
+</div>
+<script src="demo.js"></script>

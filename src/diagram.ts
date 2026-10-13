@@ -61,9 +61,12 @@ const ROW = 128; // distance between rows
 const LABEL = 20; // room for a name label above/below a circle
 const GAP = 3; // between ribbons sharing a circle side
 const FIT = 72; // widest bundle on a circle side (circle is 80)
+const ROOM = 84; // corner room (column gap minus EDGE) at which ribbons get the full FIT
 const EDGE = R + 8;
-const KMAX = 12; // largest chevron
-const KEEP = EDGE + 2 * 8 + 4; // straight length kept at each end of a turn
+const MIN_W = 340; // narrower cards draw this layout scaled down...
+const MIN_SCALE = 0.9; // ...but never so far that 12px text drops below ~11px
+const KMAX = 26; // largest chevron
+const KROOM = 12; // chevron room kept beside a circle before a fallback pill
 const PH = 20; // pill height
 const NS = "http://www.w3.org/2000/svg";
 
@@ -152,15 +155,18 @@ const colorAt = (flow: EnergyDiagramFlow, t: number): string => {
 export const drawEnergyDistributionDiagram = (
   svg: SVGSVGElement,
   model: EnergyDiagramModel,
-  width: number
+  cardWidth: number
 ): void => {
   svg.replaceChildren();
   const has = (k: EnergyNodeKey) => model.nodes.some((n) => n.key === k);
 
   // --- layout -------------------------------------------------------------------------------
   const xL = R + 2;
+  const width = Math.max(cardWidth, Math.min(MIN_W, cardWidth / MIN_SCALE));
   const xR = width - R - 2;
   const xC = (xL + xR) / 2;
+  // tighter corners get thinner ribbons, so the bends never pinch
+  const fit = Math.max(24, Math.min(FIT, (FIT * (xC - xL - EDGE)) / ROOM));
   const topRow =
     has("solar") ||
     has("gas") ||
@@ -172,7 +178,7 @@ export const drawEnergyDistributionDiagram = (
   const yB = yM + ROW;
   const height = (bottomRow ? yB : yM) + R + LABEL + 4;
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  svg.setAttribute("height", String(height));
+  svg.setAttribute("height", String((height * cardWidth) / width));
   const P: Record<EnergyNodeKey, Pt> = {
     solar: { x: xC, y: yT },
     lowCarbon: { x: xL, y: yT },
@@ -181,6 +187,20 @@ export const drawEnergyDistributionDiagram = (
     grid: { x: xL, y: yM },
     home: { x: xR, y: yM },
     battery: { x: xC, y: yB },
+  };
+  // where each circle's name goes
+  const nameAt = (node: EnergyDiagramNode) => {
+    const { x, y } = P[node.key];
+    const top =
+      node.key === "solar" ||
+      node.key === "gas" ||
+      node.key === "lowCarbon" ||
+      (node.key === "water" && !has("gas"));
+    if (node.key === "home" && has("water") && has("gas")) {
+      // the water line runs below the home circle: put the name beside it
+      return { x: x - 10, y: y + R + 16, anchor: "end" };
+    }
+    return { x, y: top ? y - R - 8 : y + R + 16, anchor: "middle" };
   };
   const defs = el(svg, "defs");
   let uid = 0;
@@ -206,7 +226,7 @@ export const drawEnergyDistributionDiagram = (
     .map((all) => {
       const ids = all.filter((i) => val[i]);
       const sum = ids.reduce((a, i) => a + val[i]!, 0);
-      return sum > 0 ? (FIT - GAP * (ids.length - 1)) / sum : Infinity;
+      return sum > 0 ? (fit - GAP * (ids.length - 1)) / sum : Infinity;
     })
     .filter((s) => Number.isFinite(s));
   const scale = scales.length ? Math.min(...scales) : 1;
@@ -270,8 +290,8 @@ export const drawEnergyDistributionDiagram = (
       const span = (sub: FlowId[]) => sub.reduce((a, i) => a + w[i]! + GAP, 0);
       const mid = SIDES[k]!.axis === "x" ? P[k].x : P[k].y;
       return [
-        mid - FIT / 2 + span(ids.slice(0, iP)) + w[fid]! / 2,
-        mid + FIT / 2 - span(ids.slice(iP + 1)) - w[fid]! / 2,
+        mid - fit / 2 + span(ids.slice(0, iP)) + w[fid]! / 2,
+        mid + fit / 2 - span(ids.slice(iP + 1)) - w[fid]! / 2,
       ];
     };
     const [loA, hiA] = range(a);
@@ -296,7 +316,9 @@ export const drawEnergyDistributionDiagram = (
   pin("gh", "grid", "home");
   pin("sb", "solar", "battery");
 
-  // Quarter turns as circular arcs, as wide as the corner allows.
+  // Quarter turns as elliptical arcs filling the corner, with a short straight lead-in at each
+  // circle. Every turn in a corner shares the arc centre (EDGE from both circles), so nested
+  // ribbons stay parallel.
   const turn = (
     x0: number,
     y0: number,
@@ -306,14 +328,12 @@ export const drawEnergyDistributionDiagram = (
   ) => {
     const sx = Math.sign(x1 - x0);
     const sy = Math.sign(y1 - y0);
-    const r = Math.max(
-      6,
-      Math.min(Math.abs(x1 - x0) - KEEP, Math.abs(y1 - y0) - KEEP)
-    );
+    const rx = Math.max(6, Math.abs(x1 - x0) - EDGE);
+    const ry = Math.max(6, Math.abs(y1 - y0) - EDGE);
     if (first === "v") {
-      return `M${x0},${y0} V${y1 - sy * r} A${r},${r} 0 0 ${-sx * sy > 0 ? 1 : 0} ${x0 + sx * r},${y1} H${x1}`;
+      return `M${x0},${y0} V${y1 - sy * ry} A${rx},${ry} 0 0 ${-sx * sy > 0 ? 1 : 0} ${x0 + sx * rx},${y1} H${x1}`;
     }
-    return `M${x0},${y0} H${x1 - sx * r} A${r},${r} 0 0 ${sx * sy > 0 ? 1 : 0} ${x1},${y0 + sy * r} V${y1}`;
+    return `M${x0},${y0} H${x1 - sx * rx} A${rx},${ry} 0 0 ${sx * sy > 0 ? 1 : 0} ${x1},${y0 + sy * ry} V${y1}`;
   };
   const d: Partial<Record<FlowId, string>> = {};
   if (w.sg) {
@@ -404,7 +424,7 @@ export const drawEnergyDistributionDiagram = (
     ribbons.push({
       flow: f,
       width: width_,
-      k: Math.max(4, Math.min(KMAX, width_ * 0.5)),
+      k: Math.max(4, Math.min(KMAX, width_ * 0.35)), // about twice the core line
       pts,
       a: { x: a.x, y: a.y },
       b: { x: b.x, y: b.y },
@@ -483,23 +503,33 @@ export const drawEnergyDistributionDiagram = (
       ? { x: pos.solar!.sb!, y: pos.grid!.gh!, w: PW + 12, h: 38 }
       : null;
   if (badge) placed.push(badge);
+  // circle names are obstacles too
+  for (const node of model.nodes) {
+    const n = nameAt(node);
+    const t = el(svg, "text", { class: "label" });
+    t.textContent = node.name;
+    const tw = t.getComputedTextLength();
+    t.remove();
+    const cx = n.anchor === "end" ? n.x - tw / 2 : n.x;
+    placed.push({ x: cx, y: n.y - 4, w: tw + 4, h: 14 });
+  }
   const guides = (to: EnergyNodeKey) => {
     const out: { axis: "x" | "y"; v: number }[] = [];
     for (let j = 0; j < 4; j++) {
       if (to === "home") {
         out.push({
           axis: "x",
-          v: P.home.x - EDGE - 2 * KMAX - 6 - PW / 2 - j * (PW + 10),
+          v: P.home.x - EDGE - 2 * KROOM - 6 - PW / 2 - j * (PW + 10),
         });
       } else if (to === "grid") {
         out.push({
           axis: "x",
-          v: P.grid.x + EDGE + 2 * KMAX + 6 + PW / 2 + j * (PW + 10),
+          v: P.grid.x + EDGE + 2 * KROOM + 6 + PW / 2 + j * (PW + 10),
         });
       } else if (to === "battery") {
         out.push({
           axis: "y",
-          v: P.battery.y - EDGE - 2 * KMAX - 6 - PH / 2 - j * (PH + 8),
+          v: P.battery.y - EDGE - 2 * KROOM - 6 - PH / 2 - j * (PH + 8),
         });
       }
     }
@@ -825,22 +855,13 @@ export const drawEnergyDistributionDiagram = (
       if (line.color) t.style.fill = line.color;
       t.textContent = line.text;
     });
-    const top =
-      node.key === "solar" ||
-      node.key === "gas" ||
-      node.key === "lowCarbon" ||
-      (node.key === "water" && !has("gas"));
+    const n = nameAt(node);
     const label = el(svg, "text", {
       class: "label",
-      "text-anchor": "middle",
-      x,
-      y: top ? y - R - 8 : y + R + 16,
+      "text-anchor": n.anchor,
+      x: n.x,
+      y: n.y,
     });
-    if (node.key === "home" && has("water") && has("gas")) {
-      // the water line runs below the home circle: put the name beside it
-      label.setAttribute("text-anchor", "end");
-      label.setAttribute("x", String(x - 10));
-    }
     label.textContent = node.name;
   }
   // home ring, split by where the energy came from
