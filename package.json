@@ -1,6 +1,6 @@
 {
   "name": "energy-ribbon-card",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Home Assistant energy distribution card with flows sized by energy",
   "type": "module",

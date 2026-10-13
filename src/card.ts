@@ -39,7 +39,7 @@ import {
   sumGrowth,
 } from "./energy";
 
-const VERSION = "0.1.1";
+const VERSION = "0.1.2";
 
 interface CardConfig {
   type: string;

@@ -77,6 +77,15 @@ const SIDES: Partial<
   battery: { axis: "x", ids: ["bg", "gb", "sb", "bh"] }, // top of battery, left -> right
 };
 
+// A straight through-line sits at the same offset on both its circles, so what's stacked before it
+// on one side plus what's after it on the other must fit too.
+const THROUGH: { id: FlowId; ids: FlowId[] }[] = [
+  { id: "gh", ids: ["sg", "gh", "bh"] },
+  { id: "gh", ids: ["sh", "gh", "gb", "bg"] },
+  { id: "sb", ids: ["sg", "sb", "bh"] },
+  { id: "sb", ids: ["bg", "gb", "sb", "sh"] },
+];
+
 interface Pt {
   x: number;
   y: number;
@@ -190,9 +199,12 @@ export const drawEnergyDistributionDiagram = (
   const sides = Object.entries(SIDES).filter(([k]) =>
     has(k as EnergyNodeKey)
   ) as [EnergyNodeKey, { axis: "x" | "y"; ids: FlowId[] }][];
-  const scales = sides
-    .map(([, sd]) => {
-      const ids = sd.ids.filter((i) => val[i]);
+  const scales = [
+    ...sides.map(([, sd]) => sd.ids),
+    ...THROUGH.filter((t) => val[t.id]).map((t) => t.ids),
+  ]
+    .map((all) => {
+      const ids = all.filter((i) => val[i]);
       const sum = ids.reduce((a, i) => a + val[i]!, 0);
       return sum > 0 ? (FIT - GAP * (ids.length - 1)) / sum : Infinity;
     })
@@ -251,7 +263,23 @@ export const drawEnergyDistributionDiagram = (
     if (pa === undefined || pb === undefined) {
       return;
     }
-    const c = (pa + pb) / 2;
+    // as close to halfway as possible while both bundles stay inside their circles
+    const range = (k: EnergyNodeKey) => {
+      const ids = SIDES[k]!.ids.filter((i) => w[i]);
+      const iP = ids.indexOf(fid);
+      const span = (sub: FlowId[]) => sub.reduce((a, i) => a + w[i]! + GAP, 0);
+      const mid = SIDES[k]!.axis === "x" ? P[k].x : P[k].y;
+      return [
+        mid - FIT / 2 + span(ids.slice(0, iP)) + w[fid]! / 2,
+        mid + FIT / 2 - span(ids.slice(iP + 1)) - w[fid]! / 2,
+      ];
+    };
+    const [loA, hiA] = range(a);
+    const [loB, hiB] = range(b);
+    const lo = Math.max(loA, loB);
+    const hi = Math.min(hiA, hiB);
+    const c =
+      lo <= hi ? Math.min(hi, Math.max(lo, (pa + pb) / 2)) : (lo + hi) / 2;
     restack(
       a,
       SIDES[a]!.ids.filter((i) => w[i]),
@@ -796,14 +824,6 @@ export const drawEnergyDistributionDiagram = (
       });
       if (line.color) t.style.fill = line.color;
       t.textContent = line.text;
-      // Shrink lines wider than the circle's chord at their outer edge (baseline + descent).
-      const d = ty + 3 - y;
-      const room = 2 * Math.sqrt(R * R - d * d) - 8;
-      const w = t.getComputedTextLength();
-      if (w > room) {
-        const size = parseFloat(getComputedStyle(t).fontSize);
-        t.style.fontSize = `${(size * room) / w}px`;
-      }
     });
     const top =
       node.key === "solar" ||
